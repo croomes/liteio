@@ -16,55 +16,68 @@ spec:
         app: nvmf-tgt
         role: node
     spec:
-      #priorityClassName: system-node-critical
+      priorityClassName: system-node-critical
       serviceAccount: obnvmf-admin
       hostNetwork: true
+      securityContext: {}
       containers:
         - name: nvmf-tgt
           securityContext:
             privileged: true
-            capabilities:
-              add: ["ALL"]
-            allowPrivilegeEscalation: true
-          image: simonc.azurecr.io/liteio/nvmftgt:20230628-numa
+          image: simonc.azurecr.io/liteio/nvmf-tgt:latest
           command:
-          - /nvmf_tgt
+          - /usr/bin/nvmf_tgt
           args:
             - "-m"
             - "[1]"
             - "-s" #memory size in MB for DPDK
-            - "256"
+            - "1024"
             - "--num-trace-entries"
             - "0"
+            - "-L"
+            - "bdev"
+            - "-L"
+            - "lvol"
+            - "-L"
+            - "rpc"
+            - "-L"
+            - "nvmf"
           resources:
             requests:
-              cpu: "1"
-              memory: "512Mi"
+              cpu: "2"
+              memory: "2Gi"
+              hugepages-2Mi: "2Gi"
             limits:
-              cpu: "1"
-              memory: "512Mi"
-              hugepages-2Mi: "512Mi"
+              cpu: "2"
+              memory: "2Gi"
+              hugepages-2Mi: "2Gi"
           volumeMounts:
-            - name: log-dir
-              mountPath: /tmp/log
             - name: hugepage
               mountPath: /hugepages
+            - name: device
+              mountPath: /dev
+            - name: dshm
+              mountPath: /dev/shm
             - name: sock-dir
-              mountPath: /usr/tmp
+              mountPath: /var/tmp
             - name: data-dir
               mountPath: /local-storage
       volumes:
-        - name: log-dir
+        - name: hugepage
+          emptyDir:
+            medium: HugePages
+        - name: device
           hostPath:
-            path: /tmp/log
-            type: DirectoryOrCreate
+            path: /dev
+            type: Directory
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
         - name: sock-dir
           hostPath:
             path: /usr/tmp/spdk
             type: DirectoryOrCreate
-        - name: hugepage
-          emptyDir:
-            medium: HugePages
         - name: data-dir
           hostPath:
             path: /local-storage

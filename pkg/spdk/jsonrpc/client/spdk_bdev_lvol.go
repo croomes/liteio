@@ -53,8 +53,11 @@ type BdevLVolCreateLVStoreReq struct {
 type BdevLVolCreateReq struct {
 	// required
 	LVolName string `json:"lvol_name"`
-	// Desired size of logical volume in bytes; Size will be rounded up to a multiple of cluster size. Either uuid or lvs_name must be specified, but not both. lvol_name will be used in the alias of the created logical volume.
-	Size int `json:"size"`
+	// Desired size of logical volume in megabytes; Size will be rounded up to a
+	// multiple of cluster size. Either uuid or lvs_name must be specified, but
+	// not both. lvol_name will be used in the alias of the created logical
+	// volume.
+	SizeInMiB int `json:"size_in_mib"`
 
 	// optional
 	ThinProvision bool        `json:"thin_provision,omitempty"`

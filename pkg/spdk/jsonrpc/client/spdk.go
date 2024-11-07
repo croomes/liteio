@@ -34,6 +34,13 @@ type SPDKClientIface interface {
 	// bdev_aio_resize
 	BdevAioResize(req BdevAioResizeReq) (result bool, err error)
 
+	// BdevUringCreate bdev_uring_create, return the name of bdev
+	BdevUringCreate(req BdevUringCreateReq) (name string, err error)
+	// bdev_uring_delete
+	BdevUringDelete(req BdevUringDeleteReq) (result bool, err error)
+	// bdev_uring_resize
+	BdevUringResize(req BdevUringResizeReq) (result bool, err error)
+
 	// framework_get_config
 	FrameworkGetConfig(req FrameworkGetConfigReq) (result []FrameworkGetConfigItem, err error)
 
@@ -112,6 +119,15 @@ func (s *SPDK) BdevAioCreate(req BdevAioCreateReq) (name string, err error) {
 	return
 }
 
+func (s *SPDK) BdevUringCreate(req BdevUringCreateReq) (name string, err error) {
+	result, err := s.rawCli.Call("bdev_uring_create", req)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(result, &name)
+	return
+}
+
 func (s *SPDK) NVMFCreateTransport(req NVMFCreateTransportReq) (res bool, err error) {
 	result, err := s.rawCli.Call("nvmf_create_transport", req)
 	if err != nil {
@@ -133,6 +149,25 @@ func (s *SPDK) BdevAioDelete(req BdevAioDeleteReq) (res bool, err error) {
 
 func (s *SPDK) BdevAioResize(req BdevAioResizeReq) (res bool, err error) {
 	result, err := s.rawCli.Call("bdev_aio_resize", req)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(result, &res)
+	return
+}
+
+// bdev_uring_delete
+func (s *SPDK) BdevUringDelete(req BdevUringDeleteReq) (res bool, err error) {
+	result, err := s.rawCli.Call("bdev_uring_delete", req)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(result, &res)
+	return
+}
+
+func (s *SPDK) BdevUringResize(req BdevUringResizeReq) (res bool, err error) {
+	result, err := s.rawCli.Call("bdev_uring_resize", req)
 	if err != nil {
 		return
 	}

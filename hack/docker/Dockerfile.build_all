@@ -1,4 +1,4 @@
-FROM golang:1.17.8 as build
+FROM golang:1.17.8 AS build
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -11,10 +11,10 @@ ENV GO111MODULE=on \
   GOARCH=${TARGETARCH} \
   GOARM=${TARGETVARIANT} \
   DEBIAN_FRONTEND=noninteractive \
-  PATH="/root/go/bin:${PATH}" \
-  RELEASE_TAG=${RELEASE_TAG}
+  PATH="/root/go/bin:${PATH}"
+  # RELEASE_TAG=${RELEASE_TAG}
 
-WORKDIR /go/src/gitlab.alipay-inc.com/dbplatform/node-disk-controller/
+WORKDIR /workdir
 
 RUN apt-get update && apt-get install -y make
 
@@ -25,7 +25,7 @@ ENV GOPROXY=${GOPROXY}
 RUN make controller
 RUN make scheduler
 
-FROM reg.docker.alibaba-inc.com/dbplatform/debian:lvm-20231206
+FROM croomes/debian:lvm-20231206
 
 ARG DBUILD_DATE
 ARG DBUILD_REPO_URL
@@ -41,7 +41,7 @@ LABEL org.label-schema.url=$DBUILD_SITE_URL
 # support aliflash
 RUN sed -i '/# types =/a \        types = [ "fd", 16, "venice", 16, "aocblk", 16 ]' /etc/lvm/lvm.conf
 
-ENV CODE_DIR="/go/src/gitlab.alipay-inc.com/dbplatform/node-disk-controller"
+ENV CODE_DIR="/workdir"
 
 COPY --from=build ${CODE_DIR}/_build/node-disk-controller /node-disk-controller
 COPY --from=build ${CODE_DIR}/_build/scheduler-plugin /scheduler-plugin

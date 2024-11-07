@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 	"lite.io/liteio/pkg/agent/config"
 	"lite.io/liteio/pkg/agent/metric"
 	"lite.io/liteio/pkg/agent/pool"
@@ -15,8 +17,6 @@ import (
 	"lite.io/liteio/pkg/generated/clientset/versioned"
 	"lite.io/liteio/pkg/spdk/hostnqn"
 	"lite.io/liteio/pkg/util/runnable"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -155,8 +155,14 @@ func (spm *StoragePoolManager) newPoolService() (ps pool.StoragePoolServiceIface
 		}
 	}
 	klog.Infof("storage config is %+v", spm.cfg.Storage)
+	klog.Infof("storage bdev config is %+v", spm.cfg.Storage.Bdev)
 
 	ps, err = pool.NewPoolService(spm.cfg.Storage)
+	if err != nil {
+		klog.Error("pool service creation failed", err)
+		time.Sleep(10 * time.Minute)
+		return
+	}
 
 	// For lvstore pool mode, spdk service is necessary. The error should be returned and panic it.
 	if spm.cfg.Storage.Pooling.Mode == v1.PoolModeSpdkLVStore {

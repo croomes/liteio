@@ -26,7 +26,8 @@ spec:
             capabilities:
               add: ["CAP_MKNOD", "CAP_SYS_ADMIN", "SYS_ADMIN", "SYS_RAWIO"]
             allowPrivilegeEscalation: true
-          image: silentred/node-disk-controller:77a64346-20231205134756
+          image: simonc.azurecr.io/liteio/node-disk-controller:test
+          imagePullPolicy: Always
           command:
           - /node-disk-controller
           args:
@@ -74,7 +75,7 @@ spec:
             - name: ko-dir
               mountPath: /lib/modules
         - name: csi-node-driver-registrar
-          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v1.2.0
+          image: mcr.microsoft.com/oss/kubernetes-csi/csi-node-driver-registrar:v1.2.0
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -107,7 +108,7 @@ spec:
             - name: registration-dir
               mountPath: /registration
         - name: liveness-probe
-          image: quay.io/k8scsi/livenessprobe:v2.0.0
+          image: mcr.microsoft.com/oss/kubernetes-csi/livenessprobe:v2.0.0
           args:
           - "--csi-address=/plugin/csi.sock"
           resources:

@@ -60,6 +60,15 @@ type BdevAioCreateReq struct {
 	BlockSize int `json:"block_size,omitempty"`
 }
 
+// BdevUringCreateReq bdev_uring_create
+type BdevUringCreateReq struct {
+	// required
+	BdevName string `json:"name"`
+	FileName string `json:"filename"`
+	// optional
+	BlockSize int `json:"block_size,omitempty"`
+}
+
 type NVMFCreateSubsystemReq struct {
 	// required
 	NQN string `json:"nqn"`
@@ -205,6 +214,15 @@ type BdevAioDeleteReq struct {
 }
 
 type BdevAioResizeReq struct {
+	Name string `json:"name"`
+	Size uint64 `json:"size"`
+}
+
+type BdevUringDeleteReq struct {
+	Name string `json:"name"`
+}
+
+type BdevUringResizeReq struct {
 	Name string `json:"name"`
 	Size uint64 `json:"size"`
 }

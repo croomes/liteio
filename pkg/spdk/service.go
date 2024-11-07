@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/klog/v2"
 	"lite.io/liteio/pkg/spdk/jsonrpc/client"
 	"lite.io/liteio/pkg/util/misc"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -36,6 +36,7 @@ type BdevIostats = client.BdevIostats
 
 type SpdkServiceIface interface {
 	AioServiceIface
+	UringServiceIface
 	TargetServiceIface
 	Reconnector
 	LVolServiceIface

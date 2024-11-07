@@ -36,6 +36,8 @@ spec:
             - "256"
             - "--num-trace-entries"
             - "0"
+            - "-L"
+            - "all"
           resources:
             requests:
               cpu: "1"

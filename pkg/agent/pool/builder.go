@@ -3,9 +3,12 @@ package pool
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
+	"k8s.io/klog/v2"
 	"lite.io/liteio/pkg/agent/config"
 	"lite.io/liteio/pkg/agent/pool/engine"
 	v1 "lite.io/liteio/pkg/api/volume.antstor.alipay.com/v1"
@@ -14,7 +17,6 @@ import (
 	"lite.io/liteio/pkg/util/lvm"
 	"lite.io/liteio/pkg/util/misc"
 	"lite.io/liteio/pkg/util/osutil"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -41,12 +43,14 @@ type PoolBuilder struct {
 	spdk spdk.SpdkServiceIface
 	kmod osutil.KmodUtilityIface
 	pci  osutil.PCIUtilityIface
+	nvme osutil.NVMeUtilityIface
 }
 
 func NewPoolBuilder() *PoolBuilder {
 	return &PoolBuilder{
 		kmod: osutil.NewKmodUtil(osutil.NewCommandExec()),
 		pci:  osutil.NewPCIUtil(osutil.NewCommandExec()),
+		nvme: osutil.NewNVMeUtil(osutil.NewCommandExec()),
 	}
 }
 
@@ -190,6 +194,8 @@ func (pb *PoolBuilder) buildSpdkLVS(cfg config.StorageStack) (info engine.Static
 		switch cfg.Bdev.Type {
 		case config.AioBdevType:
 			err = pb.buildLvsAioBdev(cfg)
+		case config.UringBdevType:
+			err = pb.buildLvsUringBdev(cfg)
 		case config.MemBdevType:
 			err = pb.buildLvsMemBdev(cfg)
 		case config.RaidBdevType:
@@ -266,6 +272,44 @@ func (pb *PoolBuilder) buildLvsAioBdev(cfg config.StorageStack) (err error) {
 	return
 }
 
+func (pb *PoolBuilder) buildLvsUringBdev(cfg config.StorageStack) (err error) {
+	klog.Info("building lvstore with io uring bdev")
+	// check if base bdev exists
+	var list []spdk.Bdev
+	list, err = pb.spdk.BdevGetBdevs(spdk.BdevGetBdevsReq{
+		BdevName: cfg.Bdev.Name,
+	})
+	if err != nil && spdk.IsNotFoundDeviceError(err) {
+		klog.Info("io uring bdev not found, create it")
+		// check file existance
+		var info fs.FileInfo
+		var errFile error
+		info, errFile = os.Stat(cfg.Bdev.FilePath)
+		if os.IsNotExist(errFile) {
+			klog.Errorf("filepath %s does not exist: %w", cfg.Bdev.FilePath, err)
+			return
+		}
+		if info.Mode()&fs.ModeDevice == 0 {
+			klog.Errorf("%s is a not a device", cfg.Bdev.FilePath)
+			return
+		}
+
+		// create uring_bdev with name and file
+		if err = pb.spdk.CreateUringBdev(spdk.UringBdevCreateRequest{
+			BdevName:  cfg.Bdev.Name,
+			DevPath:   cfg.Bdev.FilePath,
+			BlockSize: defaultBlockSize,
+		}); err != nil {
+			klog.Error(err)
+			return
+		}
+	}
+
+	klog.Infof("base bdev %s may exist, first query list %+v", cfg.Bdev.Name, list)
+
+	return
+}
+
 func (pb *PoolBuilder) buildLvsMemBdev(cfg config.StorageStack) (err error) {
 	// check if base bdev exists
 	var list []spdk.Bdev
@@ -297,73 +341,82 @@ func (pb *PoolBuilder) buildLvsMemBdev(cfg config.StorageStack) (err error) {
 }
 
 func (pb *PoolBuilder) buildLvsRaidBdev(cfg config.StorageStack) (info engine.StaticInfo, err error) {
-	klog.Info("building lvstore. unbind nvme and bind vfio-pci.")
-	// check kmod of vfio-pci
-	if err = pb.kmod.HasKmod("vfio_pci"); err != nil {
-		err = pb.kmod.ProbeKmod("vfio-pci")
-		if err != nil {
-			klog.Error("installing mod vfio-pci failed. ", err)
-			return info, err
-		}
-	}
-	// check kmod of vfio_iommu_type1
-	if err = pb.kmod.HasKmod("vfio_iommu_type1"); err != nil {
-		err = pb.kmod.ProbeKmod("vfio_iommu_type1")
-		if err != nil {
-			klog.Error("installing mod vfio_iommu_type1 failed. ", err)
-			return info, err
-		}
-	}
-
-	// unbind NVMe from nvme driver
-	var nvmeIDList []string
-	var nvmeTypeID string
-	nvmeIDList, err = pb.pci.ListNVMeID()
-	if err != nil {
-		klog.Error("list nvme devices failed, err ", err)
-		return info, err
-	}
-	if len(nvmeIDList) > 0 {
-		for _, id := range nvmeIDList {
-			// if nvme exists in nvme driver, do unbind
-			if errExist := pb.pci.CheckNVMeExistence(id, osutil.NVMeDriverName); errExist == nil {
-				klog.Infof("unbind PCIe device %s from nvme", id)
-				err = pb.pci.UnbindNVMe(id, osutil.NVMeDriverName)
-				if err != nil {
-					klog.Error(err)
-					return
-				}
-			} else {
-				klog.Infof("PCIe %s is already not controled by nvme", id)
-			}
-		}
-		// bind nvme to vfio-pci driver
-		nvmeTypeID, err = pb.pci.GetNVMeTypeID(nvmeIDList[0])
-		if err != nil {
-			klog.Error(err)
-			return
-		}
-		klog.Infof("binding NVMe Type %s to vfio-pci", nvmeTypeID)
-		err = pb.pci.BindNVMeByType(nvmeTypeID, osutil.VfioPCIDriverName)
-		if err != nil {
-			klog.Error(err)
-			return
-		}
-
-		// TODO: wait PCIe appearing in vfio-pci driver
-		time.Sleep(5 * time.Second)
-	}
-
-	// attach controller, create raid bdev, create lvstore
-	// create lvstore from pcie devices
-	// TODO: use raid name and lvs name from config
 	var lvs spdk.LVStoreInfo
-	lvs, err = pb.spdk.CreateLVStoreFromNVMeIDs(spdk.AttachNVMeReq{
-		NVMeIDs: nvmeIDList,
-	})
-	if err != nil {
-		klog.Error(err)
-		return
+
+	switch cfg.Bdev.Type {
+	case config.RaidBdevType:
+		klog.Info("building lvstore. unbind nvme and bind vfio-pci.")
+
+		var nvmeIDList []string
+		nvmeIDList, err = pb.prepareNVMePCI()
+		if err != nil {
+			klog.Error(err)
+			return
+		}
+
+		// attach controller, create raid bdev, create lvstore
+		// create lvstore from pcie devices
+		// TODO: use raid name and lvs name from config
+
+		lvs, err = pb.spdk.CreateLVStoreFromNVMeIDs(spdk.AttachNVMeReq{
+			NVMeIDs: nvmeIDList,
+		})
+		if err != nil {
+			klog.Error(err)
+			return
+		}
+	case config.UringBdevType:
+		klog.Info("building lvstore with io uring bdevs.")
+
+		var nvmePathList []string
+		nvmePathList, err = pb.prepareNVMeIOUring()
+		if err != nil {
+			klog.Error(err)
+			return
+		}
+
+		for _, path := range nvmePathList {
+			klog.Infof("nvme path %s", path)
+
+			name := filepath.Base(path)
+
+			// check if  bdev exists
+			_, err = pb.spdk.BdevGetBdevs(spdk.BdevGetBdevsReq{
+				BdevName: name,
+			})
+			if err != nil && spdk.IsNotFoundDeviceError(err) {
+				// check file existance
+				info, errFile := os.Stat(cfg.Bdev.FilePath)
+				if os.IsNotExist(errFile) {
+					klog.Error(err)
+					continue
+				}
+				if info.Mode()&fs.ModeDevice == 0 {
+					klog.Error("file is a not a device")
+					continue
+				}
+
+				// create uring_bdev with name and file
+				err = pb.spdk.CreateUringBdev(spdk.UringBdevCreateRequest{
+					BdevName:  name,
+					DevPath:   path,
+					BlockSize: defaultBlockSize,
+				})
+				if err != nil {
+					klog.Error("uring bdev creation failed", err)
+					continue
+				}
+			}
+
+		}
+
+		lvs, err = pb.spdk.CreateLVStoreFromNVMeDevicePaths(spdk.AttachNVMeReq{
+			NVMeIDs: nvmePathList,
+		})
+		if err != nil {
+			klog.Error("lvstore creation with io uring bdevs failed", err)
+			return
+		}
 	}
 
 	info.LVS = &v1.SpdkLVStore{
@@ -378,4 +431,74 @@ func (pb *PoolBuilder) buildLvsRaidBdev(cfg config.StorageStack) (info engine.St
 
 	klog.Info("successfully created lvstore", info.LVS)
 	return
+}
+
+func (pb *PoolBuilder) prepareNVMePCI() ([]string, error) {
+	var err error
+	if err = pb.kmod.HasKmod("vfio_pci"); err != nil {
+		err = pb.kmod.ProbeKmod("vfio-pci")
+		if err != nil {
+			klog.Error("installing mod vfio-pci failed. ", err)
+			return nil, err
+		}
+	}
+	// check kmod of vfio_iommu_type1
+	if err = pb.kmod.HasKmod("vfio_iommu_type1"); err != nil {
+		err = pb.kmod.ProbeKmod("vfio_iommu_type1")
+		if err != nil {
+			klog.Error("installing mod vfio_iommu_type1 failed. ", err)
+			return nil, err
+		}
+	}
+
+	// unbind NVMe from nvme driver
+	var nvmeIDList []string
+	var nvmeTypeID string
+	nvmeIDList, err = pb.pci.ListNVMeID()
+	if err != nil {
+		klog.Error("list nvme devices failed, err ", err)
+		return nil, err
+	}
+	if len(nvmeIDList) > 0 {
+		for _, id := range nvmeIDList {
+			// if nvme exists in nvme driver, do unbind
+			if errExist := pb.pci.CheckNVMeExistence(id, osutil.NVMeDriverName); errExist == nil {
+				klog.Infof("unbind PCIe device %s from nvme", id)
+				err = pb.pci.UnbindNVMe(id, osutil.NVMeDriverName)
+				if err != nil {
+					klog.Error(err)
+					return nil, err
+				}
+			} else {
+				klog.Infof("PCIe %s is already not controled by nvme", id)
+			}
+		}
+		// bind nvme to vfio-pci driver
+		nvmeTypeID, err = pb.pci.GetNVMeTypeID(nvmeIDList[0])
+		if err != nil {
+			klog.Error(err)
+			return nil, err
+		}
+		klog.Infof("binding NVMe Type %s to vfio-pci", nvmeTypeID)
+		err = pb.pci.BindNVMeByType(nvmeTypeID, osutil.VfioPCIDriverName)
+		if err != nil {
+			klog.Error(err)
+			return nil, err
+		}
+
+		// TODO: wait PCIe appearing in vfio-pci driver
+		time.Sleep(5 * time.Second)
+	}
+
+	return nvmeIDList, nil
+}
+
+func (pb *PoolBuilder) prepareNVMeIOUring() ([]string, error) {
+	nvmePathList, err := pb.nvme.ListNVMePaths()
+	if err != nil {
+		klog.Error("list nvme devices failed, err ", err)
+		return nil, err
+	}
+
+	return nvmePathList, nil
 }

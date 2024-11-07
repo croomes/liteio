@@ -18,7 +18,9 @@ spec:
       serviceAccount: obnvmf-admin
       containers:
       - name: csi-antstor
-        image: silentred/node-disk-controller:77a64346-20231205134756
+        image: simonc.azurecr.io/liteio/node-disk-controller:test
+        imagePullPolicy: Always
+
         command:
         - /node-disk-controller
         args:
@@ -49,7 +51,7 @@ spec:
         - name: socket-dir
           mountPath: /csi
       - name: csi-provisioner
-        image: "registry.k8s.io/sig-storage/csi-provisioner:v2.1.1"
+        image: "mcr.microsoft.com/oss/kubernetes-csi/csi-provisioner:v2.1.1"
         args:
             #- "--provisioner=antstor.csi.alipay.com"
             - "--csi-address=$(ADDRESS)"
@@ -71,7 +73,7 @@ spec:
         - name: socket-dir
           mountPath: /csi
       - name: csi-attacher
-        image: quay.io/k8scsi/csi-attacher:v2.0.0
+        image: mcr.microsoft.com/oss/kubernetes-csi/csi-attacher:v2.0.0
         args:
         - "--csi-address=$(ADDRESS)"
         - "--v=5"
@@ -94,7 +96,7 @@ spec:
         - name: socket-dir
           mountPath: /csi
       # - name: csi-resizer
-      #   image: reg.docker.alibaba-inc.com/kubecsi/csi-resizer:v1.3.0
+      #   image: mcr.microsoft.com/oss/kubernetes-csi/csi-resizer:v1.3.0
       #   args:
       #     - "--v=5"
       #     - "--csi-address=$(CSI_ENDPOINT)"
@@ -113,7 +115,7 @@ spec:
       #       cpu: "1"
       #       memory: "2Gi"
       - name: liveness-probe
-        image: quay.io/k8scsi/livenessprobe:v2.0.0
+        image: mcr.microsoft.com/oss/kubernetes-csi/livenessprobe:v2.0.0
         args:
         - "--csi-address=/csi/csi.sock"
         resources:

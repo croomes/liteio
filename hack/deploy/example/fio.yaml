@@ -1,0 +1,55 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fio
+  labels:
+    app: fio
+spec:
+  podManagementPolicy: Parallel  # default is OrderedReady
+  serviceName: statefulset-acstor
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: fio
+    spec:
+      nodeSelector:
+        "kubernetes.io/os": linux
+      containers:
+        - name: fio
+          image: simonc.azurecr.io/liteio/fio:latest
+          command:
+            - fio
+          args:
+            - --name=test
+            - --size=2Gi
+            - --time_based=1
+            - --ramp_time=60s
+            - --runtime=120s
+            - --rw=randwrite
+            - --bs=4k
+            - --directory=/mnt/acstor
+            - --ioengine=io_uring
+            - --direct=1
+            - --output-format=json
+            - --group_reporting
+            - --thread
+            - --iodepth=64
+          volumeMounts:
+            - name: data
+              mountPath: /mnt/acstor
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: fio
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: antstor-nvmf-mustremote
+        resources:
+          requests:
+            storage: 32Gi

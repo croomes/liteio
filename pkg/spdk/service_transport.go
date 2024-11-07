@@ -3,8 +3,8 @@ package spdk
 import (
 	"fmt"
 
-	"lite.io/liteio/pkg/spdk/jsonrpc/client"
 	"k8s.io/klog/v2"
+	"lite.io/liteio/pkg/spdk/jsonrpc/client"
 )
 
 func (svc *SpdkService) InitTransport() (err error) {
@@ -21,14 +21,14 @@ func (svc *SpdkService) InitTransport() (err error) {
 	}
 	// TODO: check whether nvmf_tgt has the capability to create VFIO transport
 	hasTCPTransport := false
-	hasVFIOTransport := false
+	// hasVFIOTransport := false
 	for _, trans := range list {
 		if trans.TransType == client.TransportTypeTCP {
 			hasTCPTransport = true
 		}
-		if trans.TransType == client.TransportTypeVFIOUSER {
-			hasVFIOTransport = true
-		}
+		// if trans.TransType == client.TransportTypeVFIOUSER {
+		// 	hasVFIOTransport = true
+		// }
 	}
 	if !hasTCPTransport {
 		result, err := cli.NVMFCreateTransport(client.NVMFCreateTransportReq{
@@ -48,23 +48,23 @@ func (svc *SpdkService) InitTransport() (err error) {
 			return err
 		}
 	}
-	if !hasVFIOTransport {
-		// create vfio transport
-		// TODO do not return error to fit current version of nvmf_tgt
-		result, err := cli.NVMFCreateTransport(client.NVMFCreateTransportReq{
-			TrType:    client.TransportTypeVFIOUSER,
-			MaxIOSize: 131072,
-		})
-		if err != nil {
-			klog.Error(err)
-			// return err
-		}
-		if !result {
-			err = fmt.Errorf("SPDK init VFIOUSER transport result is false")
-			klog.Error(err)
-			// return err
-		}
+	// if !hasVFIOTransport {
+	// 	// create vfio transport
+	// 	// TODO do not return error to fit current version of nvmf_tgt
+	// 	result, err := cli.NVMFCreateTransport(client.NVMFCreateTransportReq{
+	// 		TrType:    client.TransportTypeVFIOUSER,
+	// 		MaxIOSize: 131072,
+	// 	})
+	// 	if err != nil {
+	// 		klog.Error(err)
+	// 		// return err
+	// 	}
+	// 	if !result {
+	// 		err = fmt.Errorf("SPDK init VFIOUSER transport result is false")
+	// 		klog.Error(err)
+	// 		// return err
+	// 	}
 
-	}
+	// }
 	return
 }

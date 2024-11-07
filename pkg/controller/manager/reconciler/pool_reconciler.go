@@ -269,7 +269,7 @@ func (r *StoragePoolReconcileHandler) validateAndMutate(sp *v1.StoragePool, log 
 
 	// validation
 	if sp.Spec.NodeInfo.ID == "" {
-		err = fmt.Errorf("invalid SotragePool, it has no value of NodeInfo.ID")
+		err = fmt.Errorf("invalid StoragePool, it has no value of NodeInfo.ID")
 		log.Error(err, "invalid pool")
 		return plugin.Result{
 			Error: err,

@@ -22,7 +22,7 @@ COVERPKG := $(shell echo $(PACKAGE_LIST) | tr " " ",")
 FILES := $$(find $$($(PACKAGE_DIRECTORIES)) -name "*.go")
 FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
-IMAGE_NAME := reg.docker.alibaba-inc.com/dbplatform/node-disk-controller:test
+IMAGE_NAME := simonc.azurecr.io/liteio/node-disk-controller:test
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 CLIENT_GEN = $(shell pwd)/bin/client-gen
@@ -69,9 +69,7 @@ clean:
 
 .PHONY: build-image
 build-image:
-	cp -a _build hack/docker
-	cd hack/docker; docker build -t $(IMAGE_NAME) .
-	rm -rf hack/docker/_build
+	docker build -t $(IMAGE_NAME) -f hack/docker/Dockerfile.build_all .
 
 .PHONY: controller-gen
 controller-gen: ## Download controller-gen locally if necessary.

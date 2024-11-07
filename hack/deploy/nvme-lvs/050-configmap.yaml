@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storage-setting
+  namespace: obnvmf
+data:
+  config.yaml: |
+    scheduler:
+      maxRemoteVolumeCount: 3
+      minLocalStoragePct: 20
+      filters:
+      - Basic
+      - Affinity
+      - ObReplica
+      - MinLocalStorage
+      priorities:
+      - LeastResource
+      - PositionAdvice
+      remoteIgnoreAnnoSelector:
+        obnvmf/regard-as-remote: "false"
+      lockSchedConfig:
+        nodeSelector:
+        - key: lite.io/lock-node
+          operator: Exists
+        nodeTaints:
+        - key: lite.io/hardware-broken
+          operator: Exists
+    pluginConfigs:
+      defaultLocalSpaceRules:
+        - enableDefault: true
+          defaultLocalStoragePct: 100
+          labelSelector:
+            matchLabels:
+              lite.io/app-type: db
+      autoAdjustLocal:
+        enable: true
+        maxCountInProcess: 1
+        labelSelector:
+          matchLabels:
+            lite.io/app-type: db
+  agent-config.yaml: |
+    storage:
+      pooling:
+        name: raid-lvs
+        mode: SpdkLVStore
+      bdev:
+        type: uringBdev
+        name: test-uring-bdev

@@ -3,11 +3,12 @@ package spdk
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
+	"k8s.io/klog/v2"
 	"lite.io/liteio/pkg/spdk/jsonrpc/client"
 	"lite.io/liteio/pkg/util/misc"
-	"k8s.io/klog/v2"
 )
 
 type LVStoreInfo = client.LVStoreInfo
@@ -15,6 +16,7 @@ type LVStoreInfo = client.LVStoreInfo
 type LVolServiceIface interface {
 	// TODO: remove
 	CreateLVStoreFromNVMeIDs(req AttachNVMeReq) (lvs LVStoreInfo, err error)
+	CreateLVStoreFromNVMeDevicePaths(req AttachNVMeReq) (lvs LVStoreInfo, err error)
 
 	// LVS
 	GetLVStore(name string) (lvs LVStoreInfo, err error)
@@ -134,6 +136,56 @@ func (ss *SpdkService) CreateLVStoreFromNVMeIDs(req AttachNVMeReq) (lvs LVStoreI
 	return
 }
 
+func (ss *SpdkService) CreateLVStoreFromNVMeDevicePaths(req AttachNVMeReq) (lvs LVStoreInfo, err error) {
+	if len(req.NVMeIDs) == 0 {
+		err = fmt.Errorf("cannot create lvs with empty NVMe list")
+		return
+	}
+
+	ss.cli, err = ss.client()
+	if err != nil {
+		klog.Error("spdk client is nil, try to reconnect spdk socket", err)
+		return
+	}
+
+	// attach controller
+	var bdevNames []string
+	for _, path := range req.NVMeIDs {
+		bdevNames = append(bdevNames, filepath.Base(path))
+	}
+
+	var (
+		needRaid        bool   = len(bdevNames) > 1
+		lvsBaseBdevName string = BdevRaidName
+	)
+	if needRaid {
+		// create raid0
+		err = ss.CreateBdevRaid(CreateBdevRaidReq{
+			RaidName:    BdevRaidName,
+			BdevNames:   bdevNames,
+			RaidLevel:   "0",
+			StripSizeKB: 128,
+		})
+		if err != nil {
+			klog.Error("raid bdev creation failed", err)
+			return
+		}
+	} else {
+		lvsBaseBdevName = bdevNames[0]
+	}
+
+	// create lvs
+	lvs, err = ss.CreateLVStore(CreateLVStoreReq{
+		BdevName:    lvsBaseBdevName,
+		LVStoreName: LVStoreName,
+	})
+	if err != nil {
+		klog.Error("lvs creation failed", err)
+	}
+
+	return
+}
+
 func (ss *SpdkService) CreateLvol(req CreateLvolReq) (uuid string, err error) {
 	ss.cli, err = ss.client()
 	if err != nil {
@@ -150,12 +202,17 @@ func (ss *SpdkService) CreateLvol(req CreateLvolReq) (uuid string, err error) {
 		}
 	}
 
+	sizeMiB := req.SizeByte / misc.MiB
+	if req.SizeByte%misc.MiB > 0 {
+		sizeMiB += 1
+	}
+
 	// do create
 	if len(list) == 0 {
 		uuid, err = ss.cli.BdevLVolCreate(client.BdevLVolCreateReq{
-			LVolName: req.LvolName,
-			Size:     req.SizeByte,
-			LvsName:  req.LVStore,
+			LVolName:  req.LvolName,
+			SizeInMiB: sizeMiB,
+			LvsName:   req.LVStore,
 		})
 		if err != nil {
 			return
@@ -466,7 +523,7 @@ func (ss *SpdkService) CreateLVStore(req CreateLVStoreReq) (lvs client.LVStoreIn
 	if err != nil {
 		// only return error when error msg is "No such device"
 		if !IsNotFoundDeviceError(err) {
-			klog.Error(err)
+			klog.Error("no such device", err)
 			return
 		}
 	}

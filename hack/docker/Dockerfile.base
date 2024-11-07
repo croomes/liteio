@@ -1,5 +1,5 @@
 FROM debian:bullseye-slim
-LABEL maintainers="silentred"
+LABEL maintainers="croomes"
 LABEL description="debian bullseye-slim with lvm2, xfs, ext4, pcie, kmod, mount utils"
 
 RUN apt-get update && \

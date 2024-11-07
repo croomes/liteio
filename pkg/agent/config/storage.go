@@ -3,9 +3,10 @@ package config
 import v1 "lite.io/liteio/pkg/api/volume.antstor.alipay.com/v1"
 
 const (
-	AioBdevType  BdevType = "aioBdev"
-	MemBdevType  BdevType = "memBdev"
-	RaidBdevType BdevType = "raidBdev"
+	AioBdevType   BdevType = "aioBdev"
+	UringBdevType BdevType = "uringBdev"
+	MemBdevType   BdevType = "memBdev"
+	RaidBdevType  BdevType = "raidBdev"
 
 	DefaultLVMName   = "antstore-vg"
 	DefaultLVSName   = "antstor_lvstore"
@@ -63,7 +64,7 @@ type SpdkBdev struct {
 	Name string   `json:"name" yaml:"name"`
 	// size in byte
 	Size uint64 `json:"size" yaml:"size"`
-	// for aioBdev
+	// for aioBdev & uringBdev
 	FilePath         string `json:"filePath,omitempty" yaml:"filePath"`
 	CreateIfNotExist bool   `json:"createIfNotExist,omitempty" yaml:"createIfNotExist"`
 	// for vfio raidBdev

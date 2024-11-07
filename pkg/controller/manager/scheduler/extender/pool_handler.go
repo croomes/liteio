@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "lite.io/liteio/pkg/api/volume.antstor.alipay.com/v1"
-	"lite.io/liteio/pkg/controller/kubeutil"
-	"lite.io/liteio/pkg/controller/manager/state"
-	"lite.io/liteio/pkg/generated/clientset/versioned"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	v1 "lite.io/liteio/pkg/api/volume.antstor.alipay.com/v1"
+	"lite.io/liteio/pkg/controller/kubeutil"
+	"lite.io/liteio/pkg/controller/manager/state"
+	"lite.io/liteio/pkg/generated/clientset/versioned"
 	rt "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -110,7 +110,7 @@ func (r *StoragePoolReconciler) Reconcile(ctx context.Context, req reconcile.Req
 
 	if sp.Spec.NodeInfo.ID == "" {
 		err = fmt.Errorf("StoragePool has no value of .Spec.NodeInfo.ID")
-		log.Error(err, "invalid SotragePool")
+		log.Error(err, "invalid StoragePool")
 		return reconcile.Result{}, err
 	}
 

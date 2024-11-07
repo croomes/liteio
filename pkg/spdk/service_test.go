@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
-	spdkmock "lite.io/liteio/pkg/generated/mocks/spdk"
-	"lite.io/liteio/pkg/spdk/jsonrpc/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	spdkmock "lite.io/liteio/pkg/generated/mocks/spdk"
+	"lite.io/liteio/pkg/spdk/jsonrpc/client"
 )
 
 func TestSpdkServiceAioBdev(t *testing.T) {
@@ -53,6 +53,51 @@ func TestSpdkServiceAioBdev(t *testing.T) {
 	assert.NoError(t, err)
 
 	err = svc.DeleteAioBdev(AioBdevDeleteRequest{"bdevName"})
+	assert.NoError(t, err)
+}
+
+func TestSpdkServiceUringBdev(t *testing.T) {
+	fakeCli := spdkmock.NewSPDKClientIface(t)
+	fakeCli.On("NVMFGetTransports").Return(nil, nil).
+		On("NVMFCreateTransport", mock.Anything).Return(true, nil).
+		On("NVMFGetSubsystems", mock.Anything).Return(nil, nil).
+		On("BdevGetBdevs", mock.Anything).Return(nil, nil).
+		On("BdevUringCreate", mock.Anything).Return(func(req client.BdevUringCreateReq) string {
+		return req.BdevName
+	}, nil)
+
+	svc, err := NewSpdkService(SpdkServiceConfig{
+		CliGenFn: func() (client.SPDKClientIface, error) {
+			return fakeCli, nil
+		},
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, svc)
+
+	port, err := svc.idAlloc.NextID()
+	assert.NoError(t, err)
+	assert.Equal(t, MinSvcID, port)
+
+	err = svc.idAlloc.SyncFromTruth()
+	assert.NoError(t, err)
+
+	err = svc.CreateUringBdev(UringBdevCreateRequest{
+		BdevName:  "bdevName",
+		DevPath:   "/dev/vg/lv",
+		BlockSize: 512,
+	})
+	assert.Error(t, err)
+
+	fileName := "/tmp/mock-dev-file"
+	_, err = os.Create(fileName)
+	assert.NoError(t, err)
+	defer os.Remove(fileName)
+	err = svc.CreateUringBdev(UringBdevCreateRequest{
+		"bdevName", fileName, 512,
+	})
+	assert.NoError(t, err)
+
+	err = svc.DeleteUringBdev(UringBdevDeleteRequest{"bdevName"})
 	assert.NoError(t, err)
 }
 

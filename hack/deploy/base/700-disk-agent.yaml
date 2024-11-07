@@ -26,8 +26,8 @@ spec:
             capabilities:
               add: ["ALL"]
             allowPrivilegeEscalation: true
-          image: silentred/node-disk-controller:77a64346-20231205134756
-          #imagePullPolicy: Always
+          image: simonc.azurecr.io/liteio/node-disk-controller:test
+          imagePullPolicy: Always
           command:
             - /node-disk-controller
           args:
