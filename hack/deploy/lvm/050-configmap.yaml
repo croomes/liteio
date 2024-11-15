@@ -47,5 +47,7 @@ data:
         name: test-vg
         mode: KernelLVM
       pvs:
-      - filePath: /local-storage/pv01
-        size: 1048576000 # 1GiB
+      - devicePath: /dev/nvme0n1
+        size: 1920383410176 # 1.75 TiB
+      - devicePath: /dev/nvme1n1
+        size: 1920383410176 # 1.75 TiB
